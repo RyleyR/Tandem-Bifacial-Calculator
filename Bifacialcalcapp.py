@@ -47,7 +47,7 @@ top_eg = st.sidebar.slider("Bandgap (eV)", 1.40, 1.80, 1.60, 0.01)
 
 # Calculate true optical limit based on uploaded spectrum
 theoretical_jsc = get_jsc_limit(top_eg)
-default_jsc = round(theoretical_jsc * 0.95, 2)
+default_jsc = round(theoretical_jsc * 0.90, 2)
 st.sidebar.caption(f"Theoretical AM1.5G Optical Jsc limit: {theoretical_jsc:.2f} mA/cm²")
 
 top_jsc = st.sidebar.number_input("Actual Jsc (mA/cm²)", value=float(default_jsc), step=0.1)
@@ -59,9 +59,9 @@ albedo = st.sidebar.slider("Ground Albedo (%)", 0, 50, 20, 1)
 
 # --- Silicon Physics Dictionary ---
 si_params = {
-    "PERC": {"jsc_base": 40.5, "voc": 0.69, "bifi": 0.75},
-    "TOPCon": {"jsc_base": 41.5, "voc": 0.72, "bifi": 0.85},
-    "HJT": {"jsc_base": 42.0, "voc": 0.74, "bifi": 0.95}
+    "PERC": {"jsc_base": 39.5, "voc": 0.69, "bifi": 0.70},
+    "TOPCon": {"jsc_base": 41.5, "voc": 0.72, "bifi": 0.80},
+    "HJT": {"jsc_base": 40.0, "voc": 0.74, "bifi": 0.87}
 }
 
 si_jsc = si_params[si_type]["jsc_base"]
