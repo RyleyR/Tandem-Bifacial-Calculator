@@ -53,7 +53,6 @@ st.sidebar.header("2. Bottom Cell (Silicon)")
 si_type = st.sidebar.selectbox("Silicon Technology", ["PERC", "TOPCon", "HJT"], index=2)
 
 # --- Silicon Physics Dictionary ---
-# (Preserved your custom baseline tweaks)
 si_params = {
     "PERC": {"default_ir_eqe": 0.92, "voc": 0.69, "bifi": 0.70, "rear_eqe": 0.90},
     "TOPCon": {"default_ir_eqe": 0.95, "voc": 0.72, "bifi": 0.80, "rear_eqe": 0.92},
@@ -75,13 +74,16 @@ st.sidebar.info(f"**{si_type} Baseline Parameters:**\n\nVoc: {si_voc} V\n\nBifac
 # --- 3. Fill Factor Dynamics ---
 st.sidebar.header("3. Fill Factor Dynamics")
 base_ff = st.sidebar.slider("Baseline Fill Factor (%)", 60.0, 90.0, 80.0, 0.1) / 100.0
-ff_penalty = st.sidebar.slider("Current Matching Penalty (%)", 0.0, 10.0, 5.0, 0.1) / 100.0
-st.sidebar.caption("Simulates the drop in FF when Jtop and Jbot are perfectly matched.")
+ff_penalty = st.sidebar.slider("Exact Match Penalty (%)", 0.0, 10.0, 5.0, 0.1) / 100.0
 
-def calculate_dynamic_ff(j_top, j_bot, base, penalty):
+# NEW: Width slider to control when the penalty kicks in
+ff_width = st.sidebar.slider("Penalty Width (mA/cm²)", 0.5, 6.0, 2.0, 0.1)
+st.sidebar.caption("Controls how early the penalty kicks in. A width of 2.0 means the FF starts dropping noticeably when the sub-cells are within 2 mA/cm² of each other.")
+
+def calculate_dynamic_ff(j_top, j_bot, base, penalty, width):
     # Gaussian penalty curve based on current mismatch
     mismatch = abs(j_top - j_bot)
-    dip = penalty * np.exp(- (mismatch**2) / 3.0)
+    dip = penalty * np.exp(- (mismatch / width)**2)
     return base - dip
 
 # --- Calculations for Current Config ---
@@ -99,8 +101,8 @@ j_tandem_bifi = min(top_jsc, j_bot_bifi)
 v_tandem = top_voc + si_voc
 
 # Dynamic Fill Factor calculation for current config
-ff_mono_actual = calculate_dynamic_ff(top_jsc, j_bot_mono, base_ff, ff_penalty)
-ff_bifi_actual = calculate_dynamic_ff(top_jsc, j_bot_bifi, base_ff, ff_penalty)
+ff_mono_actual = calculate_dynamic_ff(top_jsc, j_bot_mono, base_ff, ff_penalty, ff_width)
+ff_bifi_actual = calculate_dynamic_ff(top_jsc, j_bot_bifi, base_ff, ff_penalty, ff_width)
 
 eff_mono = j_tandem_mono * v_tandem * ff_mono_actual
 eff_bifi = j_tandem_bifi * v_tandem * ff_bifi_actual
@@ -141,7 +143,7 @@ st.subheader("Performance Landscape Across Bandgaps")
 st.write("Notice the smooth 'dent' at the peak of the efficiency curves where the Fill Factor drops due to exact current matching.")
 
 voc_deficit = top_eg - top_voc
-eg_range = np.linspace(1.4, 1.8, 80) # Increased resolution to make the FF dent smoother
+eg_range = np.linspace(1.4, 1.8, 100) # Increased resolution to make the adjustable FF dent perfectly smooth
 j_top_vals, j_bot_mono_vals, j_bot_bifi_vals = [], [], []
 eff_mono_vals, eff_bifi_vals = [], []
 
@@ -157,8 +159,8 @@ for e in eg_range:
     vt = (e - voc_deficit) + si_voc
     
     # Dynamic Fill Factor logic for the sweep
-    ff_m = calculate_dynamic_ff(jt, jbm, base_ff, ff_penalty)
-    ff_b = calculate_dynamic_ff(jt, jbb, base_ff, ff_penalty)
+    ff_m = calculate_dynamic_ff(jt, jbm, base_ff, ff_penalty, ff_width)
+    ff_b = calculate_dynamic_ff(jt, jbb, base_ff, ff_penalty, ff_width)
     
     j_top_vals.append(jt)
     j_bot_mono_vals.append(jbm)
