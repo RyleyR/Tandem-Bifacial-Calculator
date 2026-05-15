@@ -53,6 +53,7 @@ st.sidebar.header("2. Bottom Cell (Silicon)")
 si_type = st.sidebar.selectbox("Silicon Technology", ["PERC", "TOPCon", "HJT"], index=2)
 
 # --- Silicon Physics Dictionary ---
+# (Preserved your custom baseline tweaks)
 si_params = {
     "PERC": {"default_ir_eqe": 0.92, "voc": 0.69, "bifi": 0.70, "rear_eqe": 0.90},
     "TOPCon": {"default_ir_eqe": 0.95, "voc": 0.72, "bifi": 0.80, "rear_eqe": 0.92},
@@ -71,6 +72,18 @@ si_rear_eqe = si_params[si_type]["rear_eqe"]
 
 st.sidebar.info(f"**{si_type} Baseline Parameters:**\n\nVoc: {si_voc} V\n\nBifaciality Factor: {int(si_bifi*100)}%\n\nRear EQE: {int(si_rear_eqe*100)}%")
 
+# --- 3. Fill Factor Dynamics ---
+st.sidebar.header("3. Fill Factor Dynamics")
+base_ff = st.sidebar.slider("Baseline Fill Factor (%)", 60.0, 90.0, 80.0, 0.1) / 100.0
+ff_penalty = st.sidebar.slider("Current Matching Penalty (%)", 0.0, 10.0, 5.0, 0.1) / 100.0
+st.sidebar.caption("Simulates the drop in FF when Jtop and Jbot are perfectly matched.")
+
+def calculate_dynamic_ff(j_top, j_bot, base, penalty):
+    # Gaussian penalty curve based on current mismatch
+    mismatch = abs(j_top - j_bot)
+    dip = penalty * np.exp(- (mismatch**2) / 3.0)
+    return base - dip
+
 # --- Calculations for Current Config ---
 optical_absorption = get_jsc_limit(top_eg)
 transmitted_ir_light = si_max_jsc - optical_absorption
@@ -84,17 +97,21 @@ j_tandem_mono = min(top_jsc, j_bot_mono)
 j_tandem_bifi = min(top_jsc, j_bot_bifi)
 
 v_tandem = top_voc + si_voc
-ff = 0.80  # Assumed static Fill Factor
 
-eff_mono = j_tandem_mono * v_tandem * ff
-eff_bifi = j_tandem_bifi * v_tandem * ff
+# Dynamic Fill Factor calculation for current config
+ff_mono_actual = calculate_dynamic_ff(top_jsc, j_bot_mono, base_ff, ff_penalty)
+ff_bifi_actual = calculate_dynamic_ff(top_jsc, j_bot_bifi, base_ff, ff_penalty)
+
+eff_mono = j_tandem_mono * v_tandem * ff_mono_actual
+eff_bifi = j_tandem_bifi * v_tandem * ff_bifi_actual
 
 # --- Top Row: Metrics ---
-m1, m2, m3, m4 = st.columns(4)
-m1.metric("Operating Tandem Jsc", f"{j_tandem_bifi:.2f} mA/cm²", help="Current bottleneck in bifacial operation.")
-m2.metric("Operating Tandem Voc", f"{v_tandem:.2f} V")
-m3.metric("Monofacial Efficiency", f"{eff_mono:.1f}%")
-m4.metric("Bifacial Efficiency", f"{eff_bifi:.1f}%")
+m1, m2, m3, m4, m5 = st.columns(5)
+m1.metric("Op. Tandem Jsc", f"{j_tandem_bifi:.2f} mA/cm²")
+m2.metric("Op. Tandem Voc", f"{v_tandem:.2f} V")
+m3.metric("Bifacial FF", f"{ff_bifi_actual*100:.1f}%")
+m4.metric("Monofacial Eff.", f"{eff_mono:.1f}%")
+m5.metric("Bifacial Eff.", f"{eff_bifi:.1f}%")
 
 st.divider()
 
@@ -120,11 +137,11 @@ with col_b:
 st.divider()
 
 # --- Bottom Row: Sensitivity Curves (True Spectrum) ---
-st.subheader("Performance Landscape Across Bandgaps (AM1.5G Spectrum)")
-st.write("These curves apply your specific EQE multipliers across the entire spectrum.")
+st.subheader("Performance Landscape Across Bandgaps")
+st.write("Notice the smooth 'dent' at the peak of the efficiency curves where the Fill Factor drops due to exact current matching.")
 
 voc_deficit = top_eg - top_voc
-eg_range = np.linspace(1.4, 1.8, 60)
+eg_range = np.linspace(1.4, 1.8, 80) # Increased resolution to make the FF dent smoother
 j_top_vals, j_bot_mono_vals, j_bot_bifi_vals = [], [], []
 eff_mono_vals, eff_bifi_vals = [], []
 
@@ -139,11 +156,15 @@ for e in eg_range:
     
     vt = (e - voc_deficit) + si_voc
     
+    # Dynamic Fill Factor logic for the sweep
+    ff_m = calculate_dynamic_ff(jt, jbm, base_ff, ff_penalty)
+    ff_b = calculate_dynamic_ff(jt, jbb, base_ff, ff_penalty)
+    
     j_top_vals.append(jt)
     j_bot_mono_vals.append(jbm)
     j_bot_bifi_vals.append(jbb)
-    eff_mono_vals.append(min(jt, jbm) * vt * ff)
-    eff_bifi_vals.append(min(jt, jbb) * vt * ff)
+    eff_mono_vals.append(min(jt, jbm) * vt * ff_m)
+    eff_bifi_vals.append(min(jt, jbb) * vt * ff_b)
 
 col_c, col_d = st.columns(2)
 
