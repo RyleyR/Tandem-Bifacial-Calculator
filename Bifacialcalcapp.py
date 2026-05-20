@@ -186,3 +186,69 @@ with col_d:
     fig_eff.add_vline(x=top_eg, line_width=2, line_dash="dot", line_color="green", annotation_text="Your Config")
     fig_eff.update_layout(title="Efficiency vs. Bandgap", xaxis_title="Top Cell Bandgap (eV)", yaxis_title="Efficiency (%)", legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01))
     st.plotly_chart(fig_eff, use_container_width=True)
+
+# --- Bottom Row 2: Bifaciality / Albedo Sweep ---
+st.divider()
+st.subheader("Performance Landscape Across Ground Albedo")
+st.write("This shows how increasing rear illumination affects the current matching. Once the bottom cell current (red) overtakes the top cell current (black), the tandem becomes top-cell limited, and further albedo increases provide no extra current. You will also see the Fill Factor penalty trigger right at the crossing point.")
+
+# Create an array of albedo values from 0 to 100%
+albedo_range = np.linspace(0, 50, 25)
+
+j_bot_bifi_albedo_vals = []
+j_tandem_albedo_vals = []
+eff_bifi_albedo_vals = []
+ff_bifi_albedo_vals = []
+
+# Using the currently selected config (top_jsc, j_bot_mono, v_tandem) as the baseline
+for a in albedo_range:
+    # Calculate new bottom current for this specific albedo
+    bifi_boost_a = (a / 100.0) * si_max_jsc * si_bifi * si_rear_eqe
+    jbb_a = j_bot_mono + bifi_boost_a
+    
+    # Calculate tandem current (min of top and bottom)
+    j_tandem_a = min(top_jsc, jbb_a)
+    
+    # Calculate dynamic FF based on the mismatch at this albedo
+    ff_a = calculate_dynamic_ff(top_jsc, jbb_a, base_ff, ff_penalty, ff_width)
+    
+    # Calculate efficiency
+    eff_a = j_tandem_a * v_tandem * ff_a
+    
+    j_bot_bifi_albedo_vals.append(jbb_a)
+    j_tandem_albedo_vals.append(j_tandem_a)
+    ff_bifi_albedo_vals.append(ff_a * 100) # Convert to % for plotting
+    eff_bifi_albedo_vals.append(eff_a)
+
+col_e, col_f = st.columns(2)
+
+with col_e:
+    fig_albedo_jsc = go.Figure()
+    # Top cell current is constant across albedo
+    fig_albedo_jsc.add_trace(go.Scatter(x=albedo_range, y=[top_jsc]*len(albedo_range), name="Top Cell Jsc (Constant)", line=dict(color='black', width=3)))
+    fig_albedo_jsc.add_trace(go.Scatter(x=albedo_range, y=j_bot_bifi_albedo_vals, name="Bottom Cell Jsc", line=dict(color='red')))
+    fig_albedo_jsc.add_trace(go.Scatter(x=albedo_range, y=j_tandem_albedo_vals, name="Op. Tandem Jsc", line=dict(color='green', dash='dash', width=3)))
+    
+    # Add a marker for the current slider selection
+    fig_albedo_jsc.add_vline(x=albedo, line_width=2, line_dash="dot", line_color="gray", annotation_text="Your Config")
+    
+    fig_albedo_jsc.update_layout(title="Current Densities vs. Albedo", xaxis_title="Ground Albedo (%)", yaxis_title="Current Density (mA/cm²)", legend=dict(yanchor="bottom", y=0.01, xanchor="right", x=0.99))
+    st.plotly_chart(fig_albedo_jsc, use_container_width=True)
+
+with col_f:
+    fig_albedo_eff = go.Figure()
+    fig_albedo_eff.add_trace(go.Scatter(x=albedo_range, y=eff_bifi_albedo_vals, name="Bifacial Efficiency", line=dict(color='orange', width=3)))
+    
+    # Optional: Plot the FF on a secondary axis to show exactly why the efficiency dips at the crossing
+    fig_albedo_eff.add_trace(go.Scatter(x=albedo_range, y=ff_bifi_albedo_vals, name="Fill Factor (%)", line=dict(color='purple', dash='dot'), yaxis="y2"))
+    
+    fig_albedo_eff.add_vline(x=albedo, line_width=2, line_dash="dot", line_color="gray", annotation_text="Your Config")
+    
+    fig_albedo_eff.update_layout(
+        title="Efficiency & Fill Factor vs. Albedo", 
+        xaxis_title="Ground Albedo (%)", 
+        yaxis_title="Efficiency (%)",
+        yaxis2=dict(title="Fill Factor (%)", overlaying="y", side="right", range=[(base_ff - ff_penalty * 1.5)*100, base_ff*100 + 2]),
+        legend=dict(yanchor="bottom", y=0.01, xanchor="right", x=0.99)
+    )
+    st.plotly_chart(fig_albedo_eff, use_container_width=True)
